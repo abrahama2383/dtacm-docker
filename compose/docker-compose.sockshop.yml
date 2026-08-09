@@ -22,10 +22,6 @@
 #   native ports and need no gateway.
 # =============================================================================
 
-x-stage-labels: &stage-labels
-  product: "sockshop"
-  stage: "${STAGE}"
-
 networks:
   sockshop:
     name: ${COMPOSE_PROJECT_NAME:-sockshop}_net
@@ -75,7 +71,7 @@ services:
     networks:
       sockshop:
         aliases: [front-end-internal]
-    labels: { app: "front-end", tier: "frontend", <<: *stage-labels }
+    labels: { app: "front-end", tier: "frontend", product: "sockshop", stage: "${STAGE}" }
 
   # ---------------------------- Business services ----------------------------
   catalogue:
@@ -85,7 +81,7 @@ services:
       sockshop:
         aliases: [catalogue-internal]
     depends_on: [catalogue-db]
-    labels: { app: "catalogue", tier: "business", <<: *stage-labels }
+    labels: { app: "catalogue", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   carts:
     # CARTS_IMAGE is what the pipeline flips between builds:
@@ -99,7 +95,7 @@ services:
       sockshop:
         aliases: [carts-internal]
     depends_on: [carts-db]
-    labels: { app: "carts", tier: "business", version: "${CARTS_VERSION:-2.3}", <<: *stage-labels }
+    labels: { app: "carts", tier: "business", version: "${CARTS_VERSION:-2.3}", product: "sockshop", stage: "${STAGE}" }
 
   orders:
     image: dynatracesockshop/orders:0.5.0
@@ -110,7 +106,7 @@ services:
       sockshop:
         aliases: [orders-internal]
     depends_on: [orders-db]
-    labels: { app: "orders", tier: "business", <<: *stage-labels }
+    labels: { app: "orders", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   user:
     image: dynatracesockshop/user:0.5.0
@@ -119,7 +115,7 @@ services:
       sockshop:
         aliases: [user-internal]
     depends_on: [user-db]
-    labels: { app: "user", tier: "business", <<: *stage-labels }
+    labels: { app: "user", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   payment:
     image: dynatracesockshop/payment:0.5.0
@@ -127,7 +123,7 @@ services:
     networks:
       sockshop:
         aliases: [payment-internal]
-    labels: { app: "payment", tier: "business", <<: *stage-labels }
+    labels: { app: "payment", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   shipping:
     image: dynatracesockshop/shipping:0.5.0
@@ -138,7 +134,7 @@ services:
       sockshop:
         aliases: [shipping-internal]
     depends_on: [rabbitmq]
-    labels: { app: "shipping", tier: "business", <<: *stage-labels }
+    labels: { app: "shipping", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   queue-master:
     image: dynatracesockshop/queue-master:0.5.0
@@ -149,7 +145,7 @@ services:
       sockshop:
         aliases: [queue-master-internal]
     depends_on: [rabbitmq]
-    labels: { app: "queue-master", tier: "messaging", <<: *stage-labels }
+    labels: { app: "queue-master", tier: "messaging", product: "sockshop", stage: "${STAGE}" }
 
   # ------------------------------- Data stores -------------------------------
   # Addressed on native ports by their real names -> no gateway needed.
@@ -158,21 +154,21 @@ services:
     restart: unless-stopped
     volumes: [ "carts-db-data:/data/db" ]
     networks: [sockshop]
-    labels: { app: "carts-db", tier: "data", <<: *stage-labels }
+    labels: { app: "carts-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   orders-db:
     image: mongo:4.4
     restart: unless-stopped
     volumes: [ "orders-db-data:/data/db" ]
     networks: [sockshop]
-    labels: { app: "orders-db", tier: "data", <<: *stage-labels }
+    labels: { app: "orders-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   user-db:
     image: mongo:4.4
     restart: unless-stopped
     volumes: [ "user-db-data:/data/db" ]
     networks: [sockshop]
-    labels: { app: "user-db", tier: "data", <<: *stage-labels }
+    labels: { app: "user-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   catalogue-db:
     image: dynatracesockshop/catalogue-db
@@ -181,10 +177,10 @@ services:
       MYSQL_ROOT_PASSWORD: fake_password
       MYSQL_DATABASE: socksdb
     networks: [sockshop]
-    labels: { app: "catalogue-db", tier: "data", <<: *stage-labels }
+    labels: { app: "catalogue-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   rabbitmq:
     image: rabbitmq:3.6.8-management
     restart: unless-stopped
     networks: [sockshop]
-    labels: { app: "rabbitmq", tier: "messaging", <<: *stage-labels }
+    labels: { app: "rabbitmq", tier: "messaging", product: "sockshop", stage: "${STAGE}" }
