@@ -1,0 +1,11 @@
+# Production-only override: publish the carts service on the host so AWX
+# (running in its own compose project) can drive the carts /promotion
+# feature-flag endpoint for the self-healing / canary-campaign demo.
+#
+# Launch prod with BOTH files:
+#   docker compose -p sockshop-prod --env-file prod.env \
+#     -f docker-compose.sockshop.yml -f docker-compose.prod.override.yml up -d
+services:
+  carts:
+    ports:
+      - "${CARTS_PUBLISH_PORT:-8091}:8080"

@@ -1,0 +1,43 @@
+# Jenkins controller. Run from the project root:
+#   docker compose -f jenkins/docker-compose.jenkins.yml up -d --build
+#
+# Requires two host facts in the top-level .env:
+#   DTACM_HOST_PATH  = absolute path of this project on the VM (for bind mounts)
+#   DOCKER_GID       = gid of the host "docker" group  ->  getent group docker | cut -d: -f3
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dtacm/jenkins:local
+    container_name: dtacm-jenkins
+    restart: unless-stopped
+    environment:
+      - CASC_JENKINS_CONFIG=/dtacm/jenkins/casc
+      - JENKINS_ADMIN_ID=${JENKINS_ADMIN_ID:-admin}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
+      - JENKINS_URL=${JENKINS_URL:-http://localhost:8080/}
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      # passed through to the pipeline so it can drive host-side docker:
+      - DTACM_HOME=/dtacm
+      - DTACM_HOST_PATH=${DTACM_HOST_PATH}
+    # let the jenkins user talk to the host docker socket
+    group_add:
+      - "${DOCKER_GID:-999}"
+    ports:
+      - "8080:8080"     # Jenkins UI
+      - "50000:50000"   # agent port (unused here, kept for parity)
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DTACM_HOST_PATH}:/dtacm
+    networks:
+      - dtacm
+
+volumes:
+  jenkins_home:
+
+networks:
+  dtacm:
+    name: dtacm
+    external: true

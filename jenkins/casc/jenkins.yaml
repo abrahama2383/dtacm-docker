@@ -1,0 +1,44 @@
+# Jenkins Configuration as Code - bootstraps the controller with no manual clicks.
+jenkins:
+  systemMessage: "Dynatrace ACM Workshop — Dockerized (single VM). Pipeline: DeploySockShop"
+  numExecutors: 2
+  scmCheckoutRetryCount: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID:-admin}"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "${JENKINS_URL:-http://localhost:8080/}"
+
+# The DeploySockShop pipeline. Source of truth is jenkins/Jenkinsfile, pulled
+# from the bind-mounted project which is a local git repo (file:///dtacm).
+jobs:
+  - script: >
+      pipelineJob('DeploySockShop') {
+        description('Unbreakable DevOps pipeline (Docker Compose edition): deploy carts to dev, JMeter load test, Dynatrace quality gate, deploy to production.')
+        parameters {
+          choiceParam('BUILD', ['One', 'Two'], 'One = good build, Two = bad build')
+          booleanParam('DT_ENABLED', false, 'Wrap stages in Dynatrace deployment-event / quality-gate steps')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('file:///dtacm') }
+                branches('*/main', '*/master')
+                extensions { }
+              }
+            }
+            scriptPath('jenkins/Jenkinsfile')
+            lightweight(false)
+          }
+        }
+      }

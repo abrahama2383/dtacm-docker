@@ -1,0 +1,35 @@
+# AWX 17.1.0 installer inventory - single VM, Docker Compose (no Kubernetes).
+# Consumed by install-awx.sh -> awx/installer/install.yml
+localhost ansible_connection=local ansible_python_interpreter="/usr/bin/env python3"
+
+[all:vars]
+
+# Deploy target = plain Docker Compose on this host
+dockerhub_base=ansible
+awx_task_hostname=awx
+awx_web_hostname=awxweb
+
+# Where the installer writes the generated compose + data
+docker_compose_dir="/var/lib/awx/awxcompose"
+postgres_data_dir="/var/lib/awx/pgdocker"
+project_data_dir="/var/lib/awx/projects"
+
+# AWX UI port (Jenkins already owns 8080; keep AWX on 8052)
+host_port=8052
+# host_port_ssl=443            # uncomment to also serve TLS
+
+# Postgres (bundled)
+pg_username=awx
+pg_password=awxpass
+pg_database=awx
+pg_port=5432
+
+# First admin login (matches the original workshop: admin / dynatrace)
+admin_user=admin
+admin_password=dynatrace
+
+# Seed demo data + a stable secret. ROTATE secret_key for anything real.
+create_preload_data=True
+secret_key=change_me_rotate_this_awx_secret_key
+
+awx_official=true

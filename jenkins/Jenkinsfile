@@ -1,0 +1,157 @@
+// =============================================================================
+// DeploySockShop pipeline - Docker Compose edition
+// -----------------------------------------------------------------------------
+// Faithful port of PipelineWithIntegration.txt from the original k8s workshop.
+// Changes vs. the original:
+//   * runs on the Jenkins built-in node (no k8s pod agents) - the controller
+//     image ships docker CLI + maven, and mounts the host docker socket.
+//   * "kubectl apply -f <manifest>" -> "docker compose -p <stage> up -d"
+//   * JMeter runs as a throwaway container ON the dev network, hitting carts:80
+//   * Every Dynatrace step is guarded by params.DT_ENABLED so the pipeline runs
+//     with OR without a Dynatrace tenant.
+//
+// BUILD parameter (mirrors the original One/Two demo):
+//   One  -> good build   -> carts wmsegar/carts:1.0 + carts_load1.jmx  (passes gate)
+//   Two  -> bad  build   -> carts wmsegar/carts:3.0 + carts_load2.jmx  (fails gate -> self-healing)
+// =============================================================================
+
+def dt(Closure body) {
+    // helper: run body, optionally wrapped in a Dynatrace deployment event
+    body()
+}
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'BUILD', choices: ['One', 'Two'], description: 'One = good build, Two = bad build')
+        booleanParam(name: 'DT_ENABLED', defaultValue: false, description: 'Wrap stages in Dynatrace deployment-event / quality-gate steps (needs a configured "Dynatrace Server")')
+    }
+
+    environment {
+        DTACM_HOME = "${env.DTACM_HOME ?: '/dtacm'}"          // project root (bind-mounted)
+        DTACM_HOST_PATH = "${env.DTACM_HOST_PATH ?: ''}"      // same dir, host-side path (for docker -v)
+        COMPOSE = "docker compose"
+    }
+
+    stages {
+
+        stage('Checkout code') {
+            steps {
+                echo "Using project at ${DTACM_HOME} (host path: ${DTACM_HOST_PATH})"
+                sh 'ls -la $DTACM_HOME/compose'
+            }
+        }
+
+        stage('Build Code') {
+            steps {
+                echo 'Code Building...'
+                sh 'mvn -v'
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                echo 'Image Building... (demo uses pre-built images; nothing to compile)'
+                sh 'docker version --format "docker client {{.Client.Version}}"'
+            }
+        }
+
+        stage('Push Image to Repo') {
+            steps {
+                echo 'Pushing Image... (skipped - pre-built images pulled from Docker Hub)'
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                script {
+                    def cartsImage = (params.BUILD == 'One') ? 'wmsegar/carts:1.0' : 'wmsegar/carts:3.0'
+                    echo "Deploying carts=${cartsImage} to dev (staging)"
+                    def deploy = {
+                        sh """
+                          CARTS_IMAGE=${cartsImage} ${COMPOSE} \
+                            -p sockshop-dev \
+                            --env-file ${DTACM_HOME}/compose/dev.env \
+                            -f ${DTACM_HOME}/compose/docker-compose.sockshop.yml \
+                            up -d --remove-orphans
+                        """
+                        echo 'Waiting for carts service to become ready...'
+                        sh "${DTACM_HOME}/scripts/wait-for-carts.sh sockshop-dev_net"
+                    }
+                    if (params.DT_ENABLED) {
+                        createDynatraceDeploymentEvent(envId: 'Dynatrace Server',
+                            tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
+                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
+                                   [context: 'CONTEXTLESS', key: 'stage', value: 'dev']]]]) { deploy() }
+                    } else { deploy() }
+                }
+            }
+        }
+
+        stage('Run Load Test') {
+            steps {
+                script {
+                    def jmx = (params.BUILD == 'One') ? 'carts_load1.jmx' : 'carts_load2.jmx'
+                    if (!env.DTACM_HOST_PATH?.trim()) {
+                        error 'DTACM_HOST_PATH must be set on the Jenkins container so JMeter can bind-mount the loadtest folder.'
+                    }
+                    def runLoad = {
+                        sh """
+                          docker run --rm --network sockshop-dev_net \
+                            -v ${DTACM_HOST_PATH}/loadtest:/test -w /test \
+                            justb4/jmeter:5.5 -n -t ${jmx} -JVUCount=5 -JLoopCount=200 -l /test/testresults.jtl
+                        """
+                    }
+                    if (params.DT_ENABLED) {
+                        recordDynatraceSession(envId: 'Dynatrace Server',
+                            testCase: 'loadtest',
+                            tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
+                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
+                                   [context: 'CONTEXTLESS', key: 'stage', value: 'dev']]]]) { runLoad() }
+                    } else { runLoad() }
+                }
+            }
+        }
+
+        stage('Dynatrace Quality Gate') {
+            when { expression { return params.DT_ENABLED } }
+            steps {
+                perfSigDynatraceReports envId: 'Dynatrace Server',
+                    nonFunctionalFailure: 2,
+                    specFile: "${DTACM_HOME}/monspec/monspec.json"
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                script {
+                    def cartsImage = (params.BUILD == 'One') ? 'wmsegar/carts:1.0' : 'wmsegar/carts:3.0'
+                    echo "Deploying carts=${cartsImage} to production"
+                    def deploy = {
+                        sh """
+                          CARTS_IMAGE=${cartsImage} ${COMPOSE} \
+                            -p sockshop-prod \
+                            --env-file ${DTACM_HOME}/compose/prod.env \
+                            -f ${DTACM_HOME}/compose/docker-compose.sockshop.yml \
+                            up -d --remove-orphans
+                        """
+                        sh "${DTACM_HOME}/scripts/wait-for-carts.sh sockshop-prod_net"
+                    }
+                    if (params.DT_ENABLED) {
+                        createDynatraceDeploymentEvent(envId: 'Dynatrace Server',
+                            tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
+                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
+                                   [context: 'CONTEXTLESS', key: 'stage', value: 'prod']]]]) { deploy() }
+                    } else { deploy() }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished: BUILD=${params.BUILD}, DT_ENABLED=${params.DT_ENABLED}"
+        }
+    }
+}

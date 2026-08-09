@@ -1,0 +1,13 @@
+{
+    "spec_version": "2.0",
+    "comment": "Dynatrace quality gate for the carts service. Tag context/keys must match how your Dynatrace tenant tags the Dockerized carts service (container labels app=carts, stage=dev are set in docker-compose.sockshop.yml). Adjust the 'tags' string if your tagging rules differ.",
+    "timeseries": [
+        {
+            "timeseriesId": "com.dynatrace.builtin:service.responsetime",
+            "aggregation": "avg",
+            "tags": "app:carts,stage:dev",
+            "upperWarning": 1000,
+            "upperSevere": 3000
+        }
+    ]
+}

@@ -1,0 +1,190 @@
+# =============================================================================
+# SockShop - single-stage stack (Docker Compose translation of the k8s manifests)
+# -----------------------------------------------------------------------------
+# This ONE file describes a full SockShop environment. It is launched TWICE,
+# once per "stage", using different Compose project names + env files:
+#
+#   docker compose -p sockshop-dev  --env-file dev.env  -f docker-compose.sockshop.yml up -d
+#   docker compose -p sockshop-prod --env-file prod.env -f docker-compose.sockshop.yml up -d
+#
+# Each project gets its OWN isolated network, so the identical service names
+# ("carts", "carts-db", ...) never collide between dev and prod - exactly the
+# way the two Kubernetes namespaces (dev / production) kept them apart.
+#
+# Why the "gateway" container?
+#   In k8s a Service exposes port 80 and forwards to the container's targetPort
+#   8080. The SockShop front-end (and inter-service calls) are hardcoded to hit
+#   http://<service>  (i.e. port 80). Docker networking cannot remap the port
+#   the container listens on, so a single nginx "gateway" carries the DNS
+#   aliases the app expects (carts, orders, catalogue, ...) and proxies each to
+#   the real container on :8080. It is the Compose equivalent of the k8s
+#   Service layer. Databases (mongo/mysql/rabbitmq) are addressed on their
+#   native ports and need no gateway.
+# =============================================================================
+
+x-stage-labels: &stage-labels
+  product: "sockshop"
+  stage: "${STAGE}"
+
+networks:
+  sockshop:
+    name: ${COMPOSE_PROJECT_NAME:-sockshop}_net
+
+volumes:
+  carts-db-data:
+  orders-db-data:
+  user-db-data:
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Gateway = the "Service" layer. Owns every HTTP service name as a network
+  # alias and reverse-proxies :80 -> <service>-internal:8080.
+  # ---------------------------------------------------------------------------
+  gateway:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    volumes:
+      - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      # Browse the SockShop UI here (dev -> 8079, prod -> 8080 by default)
+      - "${FRONTEND_PORT:-8079}:80"
+    networks:
+      sockshop:
+        aliases:
+          - front-end
+          - catalogue
+          - carts
+          - orders
+          - user
+          - payment
+          - shipping
+          - queue-master
+    depends_on:
+      - front-end
+      - carts
+      - catalogue
+      - orders
+      - user
+      - payment
+
+  # ---------------------------- Front-end (UI) -------------------------------
+  front-end:
+    image: dynatracesockshop/front-end:0.5.0
+    restart: unless-stopped
+    networks:
+      sockshop:
+        aliases: [front-end-internal]
+    labels: { app: "front-end", tier: "frontend", <<: *stage-labels }
+
+  # ---------------------------- Business services ----------------------------
+  catalogue:
+    image: dynatracesockshop/catalogue:0.5.0
+    restart: unless-stopped
+    networks:
+      sockshop:
+        aliases: [catalogue-internal]
+    depends_on: [catalogue-db]
+    labels: { app: "catalogue", tier: "business", <<: *stage-labels }
+
+  carts:
+    # CARTS_IMAGE is what the pipeline flips between builds:
+    #   good build  -> wmsegar/carts:1.0
+    #   bad  build  -> wmsegar/carts:3.0   (drives the quality-gate / self-healing demo)
+    image: ${CARTS_IMAGE:-wmsegar/carts:1.0}
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+    networks:
+      sockshop:
+        aliases: [carts-internal]
+    depends_on: [carts-db]
+    labels: { app: "carts", tier: "business", version: "${CARTS_VERSION:-2.3}", <<: *stage-labels }
+
+  orders:
+    image: dynatracesockshop/orders:0.5.0
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+    networks:
+      sockshop:
+        aliases: [orders-internal]
+    depends_on: [orders-db]
+    labels: { app: "orders", tier: "business", <<: *stage-labels }
+
+  user:
+    image: dynatracesockshop/user:0.5.0
+    restart: unless-stopped
+    networks:
+      sockshop:
+        aliases: [user-internal]
+    depends_on: [user-db]
+    labels: { app: "user", tier: "business", <<: *stage-labels }
+
+  payment:
+    image: dynatracesockshop/payment:0.5.0
+    restart: unless-stopped
+    networks:
+      sockshop:
+        aliases: [payment-internal]
+    labels: { app: "payment", tier: "business", <<: *stage-labels }
+
+  shipping:
+    image: dynatracesockshop/shipping:0.5.0
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+    networks:
+      sockshop:
+        aliases: [shipping-internal]
+    depends_on: [rabbitmq]
+    labels: { app: "shipping", tier: "business", <<: *stage-labels }
+
+  queue-master:
+    image: dynatracesockshop/queue-master:0.5.0
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+    networks:
+      sockshop:
+        aliases: [queue-master-internal]
+    depends_on: [rabbitmq]
+    labels: { app: "queue-master", tier: "messaging", <<: *stage-labels }
+
+  # ------------------------------- Data stores -------------------------------
+  # Addressed on native ports by their real names -> no gateway needed.
+  carts-db:
+    image: mongo:4.4
+    restart: unless-stopped
+    volumes: [ "carts-db-data:/data/db" ]
+    networks: [sockshop]
+    labels: { app: "carts-db", tier: "data", <<: *stage-labels }
+
+  orders-db:
+    image: mongo:4.4
+    restart: unless-stopped
+    volumes: [ "orders-db-data:/data/db" ]
+    networks: [sockshop]
+    labels: { app: "orders-db", tier: "data", <<: *stage-labels }
+
+  user-db:
+    image: mongo:4.4
+    restart: unless-stopped
+    volumes: [ "user-db-data:/data/db" ]
+    networks: [sockshop]
+    labels: { app: "user-db", tier: "data", <<: *stage-labels }
+
+  catalogue-db:
+    image: dynatracesockshop/catalogue-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: fake_password
+      MYSQL_DATABASE: socksdb
+    networks: [sockshop]
+    labels: { app: "catalogue-db", tier: "data", <<: *stage-labels }
+
+  rabbitmq:
+    image: rabbitmq:3.6.8-management
+    restart: unless-stopped
+    networks: [sockshop]
+    labels: { app: "rabbitmq", tier: "messaging", <<: *stage-labels }

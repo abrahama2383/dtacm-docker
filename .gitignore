@@ -1,0 +1,6 @@
+.env
+awx/.build/
+loadtest/testresults.jtl
+loadtest/*.jtl
+*.log
+.DS_Store

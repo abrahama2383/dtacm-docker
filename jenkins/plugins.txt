@@ -1,0 +1,13 @@
+configuration-as-code
+job-dsl
+workflow-aggregator
+pipeline-stage-view
+git
+credentials
+credentials-binding
+docker-workflow
+timestamper
+ws-cleanup
+# Dynatrace SaaS/Managed pipeline steps:
+#   createDynatraceDeploymentEvent, recordDynatraceSession, perfSigDynatraceReports
+performance-signature-dynatracesaas
