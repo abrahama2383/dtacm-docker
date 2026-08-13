@@ -11,8 +11,12 @@
 //     with OR without a Dynatrace tenant.
 //
 // BUILD parameter (mirrors the original One/Two demo):
-//   One  -> good build   -> carts wmsegar/carts:1.0 + carts_load1.jmx  (passes gate)
-//   Two  -> bad  build   -> carts wmsegar/carts:3.0 + carts_load2.jmx  (fails gate -> self-healing)
+//   One  -> good build -> dynatracesockshop/carts:0.5.0        + carts_load1.jmx (passes gate)
+//   Two  -> bad  build -> + carts-badbuild.override.yml (0.6.0,
+//                           CPU-throttled)                     + carts_load2.jmx (fails gate -> self-healing)
+// NOTE: we swapped the old musl wmsegar/carts images for the glibc
+// dynatracesockshop/carts so OneAgent can inject and carts is actually monitored;
+// the "bad build" regression is manufactured by the CPU cap in the override.
 // =============================================================================
 
 def dt(Closure body) {
@@ -66,14 +70,15 @@ pipeline {
         stage('Deploy to Staging') {
             steps {
                 script {
-                    def cartsImage = (params.BUILD == 'One') ? 'wmsegar/carts:1.0' : 'wmsegar/carts:3.0'
-                    echo "Deploying carts=${cartsImage} to dev (staging)"
+                    def files = "-f ${DTACM_HOME}/compose/docker-compose.sockshop.yml"
+                    if (params.BUILD == 'Two') { files += " -f ${DTACM_HOME}/compose/carts-badbuild.override.yml" }
+                    echo "Deploying carts (BUILD=${params.BUILD}) to dev (staging)"
                     def deploy = {
                         sh """
-                          CARTS_IMAGE=${cartsImage} ${COMPOSE} \
+                          ${COMPOSE} \
                             -p sockshop-dev \
                             --env-file ${DTACM_HOME}/compose/dev.env \
-                            -f ${DTACM_HOME}/compose/docker-compose.sockshop.yml \
+                            ${files} \
                             up -d --remove-orphans
                         """
                         echo 'Waiting for carts service to become ready...'
@@ -126,14 +131,15 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
-                    def cartsImage = (params.BUILD == 'One') ? 'wmsegar/carts:1.0' : 'wmsegar/carts:3.0'
-                    echo "Deploying carts=${cartsImage} to production"
+                    def files = "-f ${DTACM_HOME}/compose/docker-compose.sockshop.yml"
+                    if (params.BUILD == 'Two') { files += " -f ${DTACM_HOME}/compose/carts-badbuild.override.yml" }
+                    echo "Deploying carts (BUILD=${params.BUILD}) to production"
                     def deploy = {
                         sh """
-                          CARTS_IMAGE=${cartsImage} ${COMPOSE} \
+                          ${COMPOSE} \
                             -p sockshop-prod \
                             --env-file ${DTACM_HOME}/compose/prod.env \
-                            -f ${DTACM_HOME}/compose/docker-compose.sockshop.yml \
+                            ${files} \
                             up -d --remove-orphans
                         """
                         sh "${DTACM_HOME}/scripts/wait-for-carts.sh sockshop-prod_net"

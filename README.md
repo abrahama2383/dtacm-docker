@@ -117,7 +117,28 @@ here** (no Docker in the authoring environment). Expect to iterate on:
   tenant tags Docker containers.
 * The `performance-signature-dynatracesaas` Jenkins plugin needs a
   "Dynatrace Server" configured (Manage Jenkins → System) before `DT_ENABLED`.
-* SockShop images are the original `dynatracesockshop/*` / `wmsegar/*` images
-  (amd64). On Apple-silicon/arm64 VMs run with emulation or a x86 VM.
+* SockShop images are the original `dynatracesockshop/*` images (amd64). On
+  Apple-silicon/arm64 VMs run with emulation or a x86 VM.
+
+### carts: glibc image, and how the "bad build" is simulated
+
+The original workshop used `wmsegar/carts:1.0` (good) and `:3.0` (bad). Those
+images are built on an **ancient Alpine/musl** base that the current Dynatrace
+OneAgent cannot inject into (`liboneagentjava.so … getentropy: symbol not
+found`), so carts crash-loops **and** never reports the service metrics the
+quality gate needs.
+
+We therefore run the **glibc** `dynatracesockshop/carts:0.5.0` (same app,
+endpoints and `carts-db` wiring as the k8s manifests, port 8080) — OneAgent
+injects cleanly and carts is fully monitored. The **"bad build"** is no longer
+a bad image; it is `compose/carts-badbuild.override.yml`: a different build tag
+(`0.6.0`) plus a hard **CPU cap** that, under the heavier `carts_load2.jmx`,
+pushes carts past the monspec thresholds → the gate fails → self-healing fires.
+Tune the `cpus` value in that override to your VM (see the file's header).
+
+> Follow-up: the self-healing **rollback** in this Docker edition should
+> redeploy prod carts from the base compose (good build) rather than toggle the
+> old carts "promotion" feature flag, which `dynatracesockshop/carts` doesn't
+> expose. See `playbooks/remediation.yaml`.
 
 `make status` and `docker logs <name>` are your friends while bringing it up.

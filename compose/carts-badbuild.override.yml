@@ -1,0 +1,37 @@
+# =============================================================================
+# "Bad build" overlay for carts  (Docker equivalent of carts2-badbuild.yml)
+# -----------------------------------------------------------------------------
+# The original workshop tripped the Dynatrace quality gate by deploying a
+# genuinely slower carts image (wmsegar/carts:3.0). That image is built on an
+# ancient Alpine/musl base that the current OneAgent cannot inject into
+# (missing `getentropy` symbol), so carts would crash-loop AND never report the
+# service metrics the gate needs.
+#
+# Instead we keep the glibc-based, fully-monitored dynatracesockshop/carts and
+# manufacture the regression with resource starvation: a different build tag
+# (0.6.0, so the deployment event shows a "new build") plus a hard CPU cap.
+# Under the heavier carts_load2.jmx profile the throttled carts blows past the
+# monspec thresholds (upperWarning 1000ms / upperSevere 3000ms) -> gate fails
+# -> Ansible self-healing rolls production back to the good build.
+#
+# Used by the Jenkinsfile "Two" (bad) path:
+#   docker compose -p <stage> --env-file <stage>.env \
+#     -f docker-compose.sockshop.yml -f carts-badbuild.override.yml up -d
+#
+# THE REGRESSION KNOB: lower `cpus` makes carts slower / more likely to breach.
+# Tune to your VM. 0.25 is a good starting point on a 2+ vCPU box.
+# =============================================================================
+services:
+  carts:
+    image: dynatracesockshop/carts:0.6.0
+    labels:
+      app: "carts"
+      tier: "business"
+      version: "3.0"          # "new" (bad) build number for the deployment event
+      product: "sockshop"
+      stage: "${STAGE}"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"        # <- regression knob (starve carts under load)
+          memory: 768M

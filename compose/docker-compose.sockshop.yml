@@ -84,10 +84,11 @@ services:
     labels: { app: "catalogue", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   carts:
-    # CARTS_IMAGE is what the pipeline flips between builds:
-    #   good build  -> wmsegar/carts:1.0
-    #   bad  build  -> wmsegar/carts:3.0   (drives the quality-gate / self-healing demo)
-    image: ${CARTS_IMAGE:-wmsegar/carts:1.0}
+    # glibc-based SockShop carts -> OneAgent injects cleanly and carts is monitored
+    # (the old wmsegar/carts musl images crash-loop under the current OneAgent).
+    # good build -> this image (CARTS_IMAGE); bad build -> carts-badbuild.override.yml
+    # layers a throttled 0.6.0 on top to drive the quality-gate / self-healing demo.
+    image: ${CARTS_IMAGE:-dynatracesockshop/carts:0.5.0}
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
