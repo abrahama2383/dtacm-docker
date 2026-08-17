@@ -120,21 +120,27 @@ here** (no Docker in the authoring environment). Expect to iterate on:
 * SockShop images are the original `dynatracesockshop/*` images (amd64). On
   Apple-silicon/arm64 VMs run with emulation or a x86 VM.
 
-### carts: glibc image, and how the "bad build" is simulated
+### carts: we build a glibc image, and how the "bad build" is simulated
 
-The original workshop used `wmsegar/carts:1.0` (good) and `:3.0` (bad). Those
-images are built on an **ancient Alpine/musl** base that the current Dynatrace
-OneAgent cannot inject into (`liboneagentjava.so … getentropy: symbol not
-found`), so carts crash-loops **and** never reports the service metrics the
-quality gate needs.
+Every prebuilt carts image — `wmsegar/carts:1.0`/`:3.0` **and**
+`dynatracesockshop/carts:0.5.0`/`0.6.0` — is built on an **ancient Alpine/musl**
+base the current Dynatrace OneAgent cannot inject into (`liboneagentjava.so …
+getentropy: symbol not found`): carts crash-loops **and** reports no service
+metrics for the quality gate.
 
-We therefore run the **glibc** `dynatracesockshop/carts:0.5.0` (same app,
-endpoints and `carts-db` wiring as the k8s manifests, port 8080) — OneAgent
-injects cleanly and carts is fully monitored. The **"bad build"** is no longer
-a bad image; it is `compose/carts-badbuild.override.yml`: a different build tag
-(`0.6.0`) plus a hard **CPU cap** that, under the heavier `carts_load2.jmx`,
-pushes carts past the monspec thresholds → the gate fails → self-healing fires.
-Tune the `cpus` value in that override to your VM (see the file's header).
+So we **build our own** carts on a glibc JRE — `carts-glibc/Dockerfile` lifts
+the exact Spring Boot jar out of `dynatracesockshop/carts:0.5.0` and runs it on
+`eclipse-temurin:8-jre`. Same app, endpoints, `carts-db` wiring and port 8080,
+but OneAgent now injects the glibc module and carts is fully monitored.
+
+```bash
+make carts-image      # builds dtacm/carts:1.0  (make up does this automatically)
+```
+
+The **"bad build"** is not a bad image; it is `compose/carts-badbuild.override.yml`:
+the **same** glibc image plus a hard **CPU cap** that, under the heavier
+`carts_load2.jmx`, pushes carts past the monspec thresholds → gate fails →
+self-healing fires. Tune the `cpus` value in that override to your VM.
 
 > Follow-up: the self-healing **rollback** in this Docker edition should
 > redeploy prod carts from the base compose (good build) rather than toggle the

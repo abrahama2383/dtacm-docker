@@ -84,11 +84,11 @@ services:
     labels: { app: "catalogue", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   carts:
-    # glibc-based SockShop carts -> OneAgent injects cleanly and carts is monitored
-    # (the old wmsegar/carts musl images crash-loop under the current OneAgent).
-    # good build -> this image (CARTS_IMAGE); bad build -> carts-badbuild.override.yml
-    # layers a throttled 0.6.0 on top to drive the quality-gate / self-healing demo.
-    image: ${CARTS_IMAGE:-dynatracesockshop/carts:0.5.0}
+    # Locally-built glibc carts (see carts-glibc/Dockerfile: same app jar as
+    # dynatracesockshop/carts, but on a glibc JRE so the current OneAgent injects
+    # it and carts is actually monitored). Build once: `make carts-image`.
+    # good build -> this image; bad build -> carts-badbuild.override.yml adds a CPU cap.
+    image: ${CARTS_IMAGE:-dtacm/carts:1.0}
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"

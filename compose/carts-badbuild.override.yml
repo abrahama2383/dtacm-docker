@@ -23,7 +23,9 @@
 # =============================================================================
 services:
   carts:
-    image: dynatracesockshop/carts:0.6.0
+    # Same glibc image as the good build (so OneAgent still injects & monitors);
+    # the regression comes purely from the CPU cap below, not a different image.
+    image: ${CARTS_IMAGE:-dtacm/carts:1.0}
     labels:
       app: "carts"
       tier: "business"

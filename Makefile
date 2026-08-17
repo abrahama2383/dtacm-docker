@@ -1,7 +1,8 @@
 # Convenience wrapper around the scripts/ and compose files.
-.PHONY: help up down destroy status jenkins dev prod awx-install awx-config logs-jenkins
+.PHONY: help up down destroy status jenkins dev prod carts-image awx-install awx-config logs-jenkins
 
 help:
+	@echo "make carts-image  - build the glibc carts image (dtacm/carts:1.0) - REQUIRED before dev/prod"
 	@echo "make up          - network + SockShop dev & prod + Jenkins"
 	@echo "make down         - stop core stack (keep data)"
 	@echo "make destroy      - stop core stack AND delete volumes"
@@ -17,6 +18,9 @@ up:      ; @bash scripts/up.sh
 down:    ; @bash scripts/down.sh
 destroy: ; @bash scripts/down.sh -v
 status:  ; @bash scripts/status.sh
+
+carts-image:
+	docker build -t dtacm/carts:1.0 carts-glibc
 
 dev:
 	docker compose -p sockshop-dev --env-file compose/dev.env \

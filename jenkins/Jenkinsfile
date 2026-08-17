@@ -11,12 +11,13 @@
 //     with OR without a Dynatrace tenant.
 //
 // BUILD parameter (mirrors the original One/Two demo):
-//   One  -> good build -> dynatracesockshop/carts:0.5.0        + carts_load1.jmx (passes gate)
-//   Two  -> bad  build -> + carts-badbuild.override.yml (0.6.0,
-//                           CPU-throttled)                     + carts_load2.jmx (fails gate -> self-healing)
-// NOTE: we swapped the old musl wmsegar/carts images for the glibc
-// dynatracesockshop/carts so OneAgent can inject and carts is actually monitored;
-// the "bad build" regression is manufactured by the CPU cap in the override.
+//   One  -> good build -> dtacm/carts:1.0                 + carts_load1.jmx (passes gate)
+//   Two  -> bad  build -> + carts-badbuild.override.yml
+//                           (same image, CPU-throttled)    + carts_load2.jmx (fails gate -> self-healing)
+// NOTE: dtacm/carts:1.0 is our locally-built GLIBC carts (carts-glibc/Dockerfile).
+// All prebuilt carts images (wmsegar, dynatracesockshop) are old-musl and crash
+// under the current OneAgent, so we repackage the same jar on a glibc JRE; carts
+// is then monitored and the "bad build" regression comes from the CPU cap.
 // =============================================================================
 
 def dt(Closure body) {
