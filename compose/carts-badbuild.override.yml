@@ -23,9 +23,15 @@
 # =============================================================================
 services:
   carts:
-    # Same glibc image as the good build (so OneAgent still injects & monitors);
-    # the regression comes purely from the CPU cap below, not a different image.
+    # Same glibc image as the good build (so OneAgent still injects & monitors).
+    # Regression = SLOW responses, not errors: a moderate CPU cap plus a tiny JVM
+    # heap so the load test triggers heavy GC pauses -> response time climbs past
+    # the 3s severe bound while requests still succeed (200). Too-harsh a cap
+    # (e.g. 0.25 CPU) makes carts error out (100% err) and the gate sees no
+    # latency to fail on. Tune cpus / -Xmx if it doesn't breach on your VM.
     image: ${CARTS_IMAGE:-dtacm/carts:1.0}
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx160m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
     labels:
       app: "carts"
       tier: "business"
@@ -35,5 +41,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"        # <- regression knob (starve carts under load)
-          memory: 768M
+          cpus: "0.5"         # <- regression knob (slow, not dead)
+          memory: 512M
