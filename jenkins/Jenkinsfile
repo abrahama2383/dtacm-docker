@@ -88,8 +88,8 @@ pipeline {
                     if (params.DT_ENABLED) {
                         createDynatraceDeploymentEvent(envId: 'Dynatrace Server',
                             tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
-                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
-                                   [context: 'CONTEXTLESS', key: 'stage', value: 'dev']]]]) { deploy() }
+                            tags: [[context: 'ENVIRONMENT', key: 'app', value: 'carts'],
+                                   [context: 'ENVIRONMENT', key: 'stage', value: 'dev']]]]) { deploy() }
                     } else { deploy() }
                 }
             }
@@ -113,8 +113,8 @@ pipeline {
                         recordDynatraceSession(envId: 'Dynatrace Server',
                             testCase: 'loadtest',
                             tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
-                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
-                                   [context: 'CONTEXTLESS', key: 'stage', value: 'dev']]]]) { runLoad() }
+                            tags: [[context: 'ENVIRONMENT', key: 'app', value: 'carts'],
+                                   [context: 'ENVIRONMENT', key: 'stage', value: 'dev']]]]) { runLoad() }
                     } else { runLoad() }
                 }
             }
@@ -148,8 +148,8 @@ pipeline {
                     if (params.DT_ENABLED) {
                         createDynatraceDeploymentEvent(envId: 'Dynatrace Server',
                             tagMatchRules: [[meTypes: [[meType: 'SERVICE']],
-                            tags: [[context: 'CONTEXTLESS', key: 'app', value: 'carts'],
-                                   [context: 'CONTEXTLESS', key: 'stage', value: 'prod']]]]) { deploy() }
+                            tags: [[context: 'ENVIRONMENT', key: 'app', value: 'carts'],
+                                   [context: 'ENVIRONMENT', key: 'stage', value: 'prod']]]]) { deploy() }
                     } else { deploy() }
                 }
             }
