@@ -92,6 +92,10 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+      # OneAgent reads DT_TAGS -> contextless tags on the carts process, so the
+      # Jenkins deployment-event / quality-gate tagMatchRules (app:carts, stage:<stage>)
+      # resolve to this service. Docker has no k8s labels to auto-tag from.
+      DT_TAGS: "app=carts stage=${STAGE}"
     networks:
       sockshop:
         aliases: [carts-internal]
