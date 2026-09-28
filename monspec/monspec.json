@@ -7,7 +7,7 @@
             "aggregation": "avg",
             "tags": "[Environment]app:carts,[Environment]stage:dev",
             "upperWarning": 1000000,
-            "upperSevere": 3000000
+            "upperSevere": 1500000
         }
     ]
 }
