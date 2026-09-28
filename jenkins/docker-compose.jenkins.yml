@@ -20,8 +20,10 @@ services:
       # ALLOW_LOCAL_CHECKOUT: pipeline reads its Jenkinsfile from the bind-mounted
       # repo via file:///dtacm; must be a JVM arg (GitSCM caches it at class-load).
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
-      # passed through to the pipeline so it can drive host-side docker:
-      - DTACM_HOME=/dtacm
+      # passed through to the pipeline so it can drive host-side docker.
+      # DTACM_HOME = the HOST path (repo is mounted at the same path in-container),
+      # so `docker compose` bind-mount sources resolve correctly on the host daemon.
+      - DTACM_HOME=${DTACM_HOST_PATH}
       - DTACM_HOST_PATH=${DTACM_HOST_PATH}
     # let the jenkins user talk to the host docker socket
     group_add:
@@ -33,6 +35,9 @@ services:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DTACM_HOST_PATH}:/dtacm
+      # same-path mount so compose bind sources (e.g. ./gateway.conf) that the
+      # pipeline hands to the HOST docker daemon exist at that path on the host too.
+      - ${DTACM_HOST_PATH}:${DTACM_HOST_PATH}
     networks:
       - dtacm
 
