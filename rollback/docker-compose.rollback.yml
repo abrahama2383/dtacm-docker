@@ -1,0 +1,14 @@
+# Rollback webhook for AWX self-healing. Has the host docker socket so it can
+# heal prod carts; exposes :9000 which the AWX remediation playbook (or a manual
+# curl) triggers.  Start:  docker compose -f rollback/docker-compose.rollback.yml up -d
+services:
+  rollback-webhook:
+    image: docker:27-cli
+    container_name: dtacm-rollback-webhook
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/rollback:ro
+    ports:
+      - "9000:9000"      # AWX -> http://<vm-host>:9000
+    entrypoint: ["sh", "/rollback/serve.sh"]
