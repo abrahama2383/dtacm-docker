@@ -31,7 +31,7 @@ services:
     # latency to fail on. Tune cpus / -Xmx if it doesn't breach on your VM.
     image: ${CARTS_IMAGE:-dtacm/carts:1.0}
     environment:
-      JAVA_OPTS: "-Xms64m -Xmx160m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
     labels:
       app: "carts"
       tier: "business"
@@ -41,5 +41,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"         # <- regression knob (slow, not dead)
-          memory: 512M
+          cpus: "0.3"         # <- regression knob (slow, not dead)
+          memory: 384M
