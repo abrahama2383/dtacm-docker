@@ -80,7 +80,8 @@ services:
     networks:
       sockshop:
         aliases: [catalogue-internal]
-    depends_on: [catalogue-db]
+    depends_on:
+      catalogue-db: { condition: service_healthy }
     labels: { app: "catalogue", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   carts:
@@ -99,7 +100,8 @@ services:
     networks:
       sockshop:
         aliases: [carts-internal]
-    depends_on: [carts-db]
+    depends_on:
+      carts-db: { condition: service_healthy }
     labels: { app: "carts", tier: "business", version: "${CARTS_VERSION:-2.3}", product: "sockshop", stage: "${STAGE}" }
 
   orders:
@@ -110,7 +112,8 @@ services:
     networks:
       sockshop:
         aliases: [orders-internal]
-    depends_on: [orders-db]
+    depends_on:
+      orders-db: { condition: service_healthy }
     labels: { app: "orders", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   user:
@@ -119,7 +122,8 @@ services:
     networks:
       sockshop:
         aliases: [user-internal]
-    depends_on: [user-db]
+    depends_on:
+      user-db: { condition: service_healthy }
     labels: { app: "user", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   payment:
@@ -138,7 +142,8 @@ services:
     networks:
       sockshop:
         aliases: [shipping-internal]
-    depends_on: [rabbitmq]
+    depends_on:
+      rabbitmq: { condition: service_healthy }
     labels: { app: "shipping", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   queue-master:
@@ -149,7 +154,8 @@ services:
     networks:
       sockshop:
         aliases: [queue-master-internal]
-    depends_on: [rabbitmq]
+    depends_on:
+      rabbitmq: { condition: service_healthy }
     labels: { app: "queue-master", tier: "messaging", product: "sockshop", stage: "${STAGE}" }
 
   # ------------------------------- Data stores -------------------------------
@@ -159,6 +165,12 @@ services:
     restart: unless-stopped
     volumes: [ "carts-db-data:/data/db" ]
     networks: [sockshop]
+    healthcheck:
+      test: ["CMD","mongo","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     labels: { app: "carts-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   orders-db:
@@ -166,6 +178,12 @@ services:
     restart: unless-stopped
     volumes: [ "orders-db-data:/data/db" ]
     networks: [sockshop]
+    healthcheck:
+      test: ["CMD","mongo","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     labels: { app: "orders-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   user-db:
@@ -173,6 +191,12 @@ services:
     restart: unless-stopped
     volumes: [ "user-db-data:/data/db" ]
     networks: [sockshop]
+    healthcheck:
+      test: ["CMD","mongo","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     labels: { app: "user-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   catalogue-db:
@@ -182,10 +206,22 @@ services:
       MYSQL_ROOT_PASSWORD: fake_password
       MYSQL_DATABASE: socksdb
     networks: [sockshop]
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","-uroot","-pfake_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     labels: { app: "catalogue-db", tier: "data", product: "sockshop", stage: "${STAGE}" }
 
   rabbitmq:
     image: rabbitmq:3.6.8-management
     restart: unless-stopped
     networks: [sockshop]
+    healthcheck:
+      test: ["CMD","rabbitmqctl","status"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
     labels: { app: "rabbitmq", tier: "messaging", product: "sockshop", stage: "${STAGE}" }
