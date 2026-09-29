@@ -6,8 +6,8 @@
             "timeseriesId": "com.dynatrace.builtin:service.responsetime",
             "aggregation": "avg",
             "tags": "[Environment]app:carts,[Environment]stage:dev",
-            "upperWarning": 1000000,
-            "upperSevere": 1500000
+            "upperWarning": 900000,
+            "upperSevere": 1000000
         }
     ]
 }
