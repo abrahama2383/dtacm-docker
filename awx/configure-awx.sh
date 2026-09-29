@@ -38,6 +38,8 @@ GIT_BRANCH="${GIT_BRANCH:-master}"
 HOST_IP="${HOST_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
 CARTS_PUBLISH_PORT="${CARTS_PUBLISH_PORT:-8091}"
 CARTS_PROMOTION_URL="http://${HOST_IP}:${CARTS_PUBLISH_PORT}/carts/1/items/promotion"
+# rollback webhook the remediation playbook curls to redeploy good prod carts
+ROLLBACK_WEBHOOK_URL="${ROLLBACK_WEBHOOK_URL:-http://${HOST_IP}:9000}"
 
 AUTH=(--user "${AWX_USER}:${AWX_PASSWORD}")
 JSON=(-H "Content-Type: application/json")
@@ -83,6 +85,7 @@ sleep 45
 # 3) Inventory with all runtime variables -------------------------------------
 INV_VARS="---
 tenanturl: \"${DT_TENANT_URL}\"
+rollback_webhook_url: \"${ROLLBACK_WEBHOOK_URL}\"
 carts_promotion_url: \"${CARTS_PROMOTION_URL}\"
 commentuser: \"Ansible Playbook\"
 tower_user: \"${AWX_USER}\"
