@@ -1,11 +1,14 @@
 #!/bin/sh
-# Self-healing rollback action. The "bad build" differs from the good build only
-# by the CPU cap that carts-badbuild.override.yml puts on prod carts, so healing
-# = remove that cap and restart. (For an image-based bad build, replace this with
-# a compose redeploy of the previous good revision.)
+# Self-healing rollback: redeploy prod carts from the GOOD spec (base compose +
+# prod publish override, WITHOUT carts-badbuild.override.yml), which recreates
+# the container with no CPU cap. A CPU cap set via --cpus cannot be removed with
+# `docker update`, so a recreate is required.
 set -u
-C="${CARTS_CONTAINER:-sockshop-prod-carts-internal-1}"
-echo "[rollback $(date -u +%H:%M:%S)] healing $C"
-docker update --cpu-quota=-1 --cpu-period=100000 "$C" 2>&1 || echo "update failed"
-docker restart "$C" >/dev/null 2>&1 || echo "restart failed"
-echo "[rollback] prod carts cpu-quota removed + restarted"
+D="${DTACM_HOME:-/home/abraham_anugrah/dtacm-docker}"
+echo "[rollback $(date -u +%H:%M:%S)] redeploying good prod carts from $D"
+cd "$D" || { echo "repo $D not found"; exit 1; }
+docker compose -p sockshop-prod --env-file compose/prod.env \
+  -f compose/docker-compose.sockshop.yml \
+  -f compose/docker-compose.prod.override.yml \
+  up -d --force-recreate carts-internal 2>&1
+echo "[rollback] prod carts redeployed (good build, no throttle)"

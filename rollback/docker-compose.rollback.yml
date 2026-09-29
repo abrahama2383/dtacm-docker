@@ -6,9 +6,14 @@ services:
     image: docker:27-cli
     container_name: dtacm-rollback-webhook
     restart: unless-stopped
+    environment:
+      - DTACM_HOME=${DTACM_HOST_PATH}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/rollback:ro
+      # repo at the SAME host path so `docker compose` bind sources resolve on
+      # the host daemon (docker-out-of-docker), like Jenkins does
+      - ${DTACM_HOST_PATH}:${DTACM_HOST_PATH}:ro
     ports:
       - "9000:9000"      # AWX -> http://<vm-host>:9000
     entrypoint: ["sh", "/rollback/serve.sh"]
