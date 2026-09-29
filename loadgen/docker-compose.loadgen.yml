@@ -1,0 +1,21 @@
+# Always-on traffic generator for one SockShop stage. Attaches to that stage's
+# existing (external) network and hits the services through the gateway.
+#
+#   SOCKSHOP_NET=sockshop-dev_net  LOADGEN_NAME=loadgen-dev \
+#     docker compose -p loadgen-dev -f loadgen/docker-compose.loadgen.yml up -d
+#
+# (see `make loadgen` / `make loadgen-down`)
+services:
+  loadgen:
+    image: curlimages/curl:latest
+    container_name: ${LOADGEN_NAME:-loadgen}
+    restart: unless-stopped
+    volumes:
+      - ./journey.sh:/journey.sh:ro
+    command: ["sh", "/journey.sh"]
+    networks: [sockshop]
+
+networks:
+  sockshop:
+    name: ${SOCKSHOP_NET:-sockshop-dev_net}
+    external: true

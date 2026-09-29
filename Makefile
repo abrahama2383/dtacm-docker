@@ -1,5 +1,5 @@
 # Convenience wrapper around the scripts/ and compose files.
-.PHONY: help up down destroy status jenkins dev prod carts-image awx-install awx-config logs-jenkins
+.PHONY: help up down destroy status jenkins dev prod carts-image loadgen loadgen-down awx-install awx-config logs-jenkins
 
 help:
 	@echo "make carts-image  - build the glibc carts image (dtacm/carts:1.0) - REQUIRED before dev/prod"
@@ -9,6 +9,8 @@ help:
 	@echo "make status       - health of all components"
 	@echo "make dev          - (re)deploy SockShop dev only"
 	@echo "make prod         - (re)deploy SockShop prod only"
+	@echo "make loadgen      - start always-on traffic gen (dev+prod) so all services show in Dynatrace"
+	@echo "make loadgen-down - stop the traffic generators"
 	@echo "make jenkins      - (re)build + start Jenkins only"
 	@echo "make awx-install  - install AWX 17.1.0 (Docker) via its Ansible installer"
 	@echo "make awx-config   - create AWX job templates for self-healing"
@@ -21,6 +23,14 @@ status:  ; @bash scripts/status.sh
 
 carts-image:
 	docker build -t dtacm/carts:1.0 carts-glibc
+
+loadgen:
+	SOCKSHOP_NET=sockshop-dev_net  LOADGEN_NAME=loadgen-dev  docker compose -p loadgen-dev  -f loadgen/docker-compose.loadgen.yml up -d
+	SOCKSHOP_NET=sockshop-prod_net LOADGEN_NAME=loadgen-prod docker compose -p loadgen-prod -f loadgen/docker-compose.loadgen.yml up -d
+
+loadgen-down:
+	-docker compose -p loadgen-dev  -f loadgen/docker-compose.loadgen.yml down
+	-docker compose -p loadgen-prod -f loadgen/docker-compose.loadgen.yml down
 
 dev:
 	docker compose -p sockshop-dev --env-file compose/dev.env \
