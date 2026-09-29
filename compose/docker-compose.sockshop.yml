@@ -88,7 +88,11 @@ services:
     labels: { app: "orders", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
   user-internal:
-    image: dynatracesockshop/user:0.5.0
+    # weaveworksdemos/user (reference impl) instead of dynatracesockshop/user:0.5.0:
+    # the dynatrace fork returns empty HATEOAS _links (no href), so the front-end
+    # can't assemble an order and checkout 500s. This image populates _links.
+    # NOTE: it listens on port 80 (not 8080) - the gateway maps user -> :80.
+    image: weaveworksdemos/user:0.4.7
     restart: unless-stopped
     networks: [sockshop]
     depends_on:
