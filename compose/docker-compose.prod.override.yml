@@ -6,6 +6,6 @@
 #   docker compose -p sockshop-prod --env-file prod.env \
 #     -f docker-compose.sockshop.yml -f docker-compose.prod.override.yml up -d
 services:
-  carts:
+  carts-internal:
     ports:
       - "${CARTS_PUBLISH_PORT:-8091}:8080"

@@ -1,25 +1,19 @@
 # =============================================================================
 # SockShop - single-stage stack (Docker Compose translation of the k8s manifests)
 # -----------------------------------------------------------------------------
-# This ONE file describes a full SockShop environment. It is launched TWICE,
-# once per "stage", using different Compose project names + env files:
-#
+# Launched TWICE (dev + prod) with different project names + env files:
 #   docker compose -p sockshop-dev  --env-file dev.env  -f docker-compose.sockshop.yml up -d
 #   docker compose -p sockshop-prod --env-file prod.env -f docker-compose.sockshop.yml up -d
 #
-# Each project gets its OWN isolated network, so the identical service names
-# ("carts", "carts-db", ...) never collide between dev and prod - exactly the
-# way the two Kubernetes namespaces (dev / production) kept them apart.
-#
-# Why the "gateway" container?
-#   In k8s a Service exposes port 80 and forwards to the container's targetPort
-#   8080. The SockShop front-end (and inter-service calls) are hardcoded to hit
-#   http://<service>  (i.e. port 80). Docker networking cannot remap the port
-#   the container listens on, so a single nginx "gateway" carries the DNS
-#   aliases the app expects (carts, orders, catalogue, ...) and proxies each to
-#   the real container on :8080. It is the Compose equivalent of the k8s
-#   Service layer. Databases (mongo/mysql/rabbitmq) are addressed on their
-#   native ports and need no gateway.
+# The nginx "gateway" is the Compose equivalent of the k8s Service layer: it owns
+# every bare HTTP name (carts, catalogue, ...) as a network alias and proxies
+# :80 -> <name>-internal:8080. The app containers are therefore named
+# "<name>-internal" (their service key) so the BARE name resolves ONLY to the
+# gateway. (If an app service were keyed "carts", Docker would also register
+# "carts" for the real container, and callers hitting carts:80 would randomly
+# land on the app - which listens on 8080, not 80 - and get connection-refused.)
+# Databases keep their real names (carts-db, ...) and are hit directly on their
+# native ports, so they need no gateway.
 # =============================================================================
 
 networks:
@@ -33,133 +27,101 @@ volumes:
 
 services:
 
-  # ---------------------------------------------------------------------------
-  # Gateway = the "Service" layer. Owns every HTTP service name as a network
-  # alias and reverse-proxies :80 -> <service>-internal:8080.
-  # ---------------------------------------------------------------------------
+  # ---- Gateway = the "Service" layer (owns the bare names) -------------------
   gateway:
     image: nginx:1.25-alpine
     restart: unless-stopped
     volumes:
       - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      # Browse the SockShop UI here (dev -> 8079, prod -> 8080 by default)
-      - "${FRONTEND_PORT:-8079}:80"
+      - "${FRONTEND_PORT:-8079}:80"     # browse the SockShop UI here
     networks:
       sockshop:
-        aliases:
-          - front-end
-          - catalogue
-          - carts
-          - orders
-          - user
-          - payment
-          - shipping
-          - queue-master
+        aliases: [front-end, catalogue, carts, orders, user, payment, shipping, queue-master]
     depends_on:
-      - front-end
-      - carts
-      - catalogue
-      - orders
-      - user
-      - payment
+      - front-end-internal
+      - catalogue-internal
+      - carts-internal
+      - orders-internal
+      - user-internal
+      - payment-internal
 
-  # ---------------------------- Front-end (UI) -------------------------------
-  front-end:
+  # ---- Front-end (UI) --------------------------------------------------------
+  front-end-internal:
     image: dynatracesockshop/front-end:0.5.0
     restart: unless-stopped
-    networks:
-      sockshop:
-        aliases: [front-end-internal]
+    networks: [sockshop]
     labels: { app: "front-end", tier: "frontend", product: "sockshop", stage: "${STAGE}" }
 
-  # ---------------------------- Business services ----------------------------
-  catalogue:
+  # ---- Business services -----------------------------------------------------
+  catalogue-internal:
     image: dynatracesockshop/catalogue:0.5.0
     restart: unless-stopped
-    networks:
-      sockshop:
-        aliases: [catalogue-internal]
+    networks: [sockshop]
     depends_on:
       catalogue-db: { condition: service_healthy }
     labels: { app: "catalogue", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
-  carts:
-    # Locally-built glibc carts (see carts-glibc/Dockerfile: same app jar as
-    # dynatracesockshop/carts, but on a glibc JRE so the current OneAgent injects
-    # it and carts is actually monitored). Build once: `make carts-image`.
-    # good build -> this image; bad build -> carts-badbuild.override.yml adds a CPU cap.
+  carts-internal:
+    # Locally-built glibc carts (carts-glibc/Dockerfile) so OneAgent injects and
+    # carts is monitored. good build -> this image; bad build -> carts-badbuild.override.yml.
     image: ${CARTS_IMAGE:-dtacm/carts:1.0}
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
-      # OneAgent reads DT_TAGS -> contextless tags on the carts process, so the
-      # Jenkins deployment-event / quality-gate tagMatchRules (app:carts, stage:<stage>)
-      # resolve to this service. Docker has no k8s labels to auto-tag from.
+      # OneAgent reads DT_TAGS -> [Environment] tags on the carts process/service,
+      # which the Jenkins deployment-event / quality-gate tagMatchRules match.
       DT_TAGS: "app=carts stage=${STAGE}"
-    networks:
-      sockshop:
-        aliases: [carts-internal]
+    networks: [sockshop]
     depends_on:
       carts-db: { condition: service_healthy }
     labels: { app: "carts", tier: "business", version: "${CARTS_VERSION:-2.3}", product: "sockshop", stage: "${STAGE}" }
 
-  orders:
+  orders-internal:
     image: dynatracesockshop/orders:0.5.0
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
-    networks:
-      sockshop:
-        aliases: [orders-internal]
+    networks: [sockshop]
     depends_on:
       orders-db: { condition: service_healthy }
     labels: { app: "orders", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
-  user:
+  user-internal:
     image: dynatracesockshop/user:0.5.0
     restart: unless-stopped
-    networks:
-      sockshop:
-        aliases: [user-internal]
+    networks: [sockshop]
     depends_on:
       user-db: { condition: service_healthy }
     labels: { app: "user", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
-  payment:
+  payment-internal:
     image: dynatracesockshop/payment:0.5.0
     restart: unless-stopped
-    networks:
-      sockshop:
-        aliases: [payment-internal]
+    networks: [sockshop]
     labels: { app: "payment", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
-  shipping:
+  shipping-internal:
     image: dynatracesockshop/shipping:0.5.0
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
-    networks:
-      sockshop:
-        aliases: [shipping-internal]
+    networks: [sockshop]
     depends_on:
       rabbitmq: { condition: service_healthy }
     labels: { app: "shipping", tier: "business", product: "sockshop", stage: "${STAGE}" }
 
-  queue-master:
+  queue-master-internal:
     image: dynatracesockshop/queue-master:0.5.0
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
-    networks:
-      sockshop:
-        aliases: [queue-master-internal]
+    networks: [sockshop]
     depends_on:
       rabbitmq: { condition: service_healthy }
     labels: { app: "queue-master", tier: "messaging", product: "sockshop", stage: "${STAGE}" }
 
-  # ------------------------------- Data stores -------------------------------
-  # Addressed on native ports by their real names -> no gateway needed.
+  # ---- Data stores (real names, native ports, no gateway) --------------------
   carts-db:
     image: mongo:4.4
     restart: unless-stopped

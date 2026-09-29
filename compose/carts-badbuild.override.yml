@@ -22,7 +22,7 @@
 # Tune to your VM. 0.25 is a good starting point on a 2+ vCPU box.
 # =============================================================================
 services:
-  carts:
+  carts-internal:
     # Same glibc image as the good build (so OneAgent still injects & monitors).
     # Regression = SLOW responses, not errors: a moderate CPU cap plus a tiny JVM
     # heap so the load test triggers heavy GC pauses -> response time climbs past
