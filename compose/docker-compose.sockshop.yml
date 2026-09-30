@@ -72,6 +72,9 @@ services:
       # OneAgent reads DT_TAGS -> [Environment] tags on the carts process/service,
       # which the Jenkins deployment-event / quality-gate tagMatchRules match.
       DT_TAGS: "app=carts stage=${STAGE}"
+      # DT_CLUSTER_ID splits dev vs prod into separate process groups/services
+      # (identical dev+prod processes otherwise merge into one Dynatrace service).
+      DT_CLUSTER_ID: "sockshop-${STAGE}"
     networks: [sockshop]
     depends_on:
       carts-db: { condition: service_healthy }
@@ -82,6 +85,8 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+      DT_TAGS: "app=orders stage=${STAGE}"
+      DT_CLUSTER_ID: "sockshop-${STAGE}"
     networks: [sockshop]
     depends_on:
       orders-db: { condition: service_healthy }
@@ -110,6 +115,8 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+      DT_TAGS: "app=shipping stage=${STAGE}"
+      DT_CLUSTER_ID: "sockshop-${STAGE}"
     networks: [sockshop]
     depends_on:
       rabbitmq: { condition: service_healthy }
@@ -120,6 +127,8 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom"
+      DT_TAGS: "app=queue-master stage=${STAGE}"
+      DT_CLUSTER_ID: "sockshop-${STAGE}"
     networks: [sockshop]
     depends_on:
       rabbitmq: { condition: service_healthy }
